@@ -47,7 +47,7 @@ class AddOgMetaTags
         // Load discussion — if not found fall through to index tags
         $discussion = null;
         try {
-            $discussion = Discussion::with('firstPost')->find($id);
+            $discussion = Discussion::find($id);
         } catch (\Throwable) {}
 
         if (!$discussion) {
@@ -81,7 +81,7 @@ class AddOgMetaTags
         $image   = null;
 
         try {
-            $firstPost = $discussion->firstPost;
+            $firstPost = $discussion->firstPost ?? $discussion->firstPost()->first();
             if ($firstPost) {
                 $html = $this->getPostHtml($firstPost, $request);
                 $text    = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
