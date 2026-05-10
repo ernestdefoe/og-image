@@ -1,0 +1,27 @@
+{
+    "name": "ernestdefoe/og-image",
+    "description": "Adds Open Graph and Twitter Card meta tags to Flarum 2 discussions for rich Facebook and social media previews",
+    "type": "flarum-extension",
+    "license": "MIT",
+    "require": {
+        "flarum/core": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ernestdefoe\\OgImage\\": "src/"
+        }
+    },
+    "extra": {
+        "flarum-extension": {
+            "title": "OG Image",
+            "category": "theme",
+            "icon": {
+                "name": "fas fa-share-alt",
+                "backgroundColor": "#1877F2",
+                "color": "#fff"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
