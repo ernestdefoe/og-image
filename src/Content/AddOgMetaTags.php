@@ -22,10 +22,16 @@ class AddOgMetaTags
 
         $this->addOg($document, 'og:site_name', $forumName);
 
-        $discussionId = $this->discussionIdFromRequest($request);
+        $routeName   = (string) ($request->getAttribute('routeName') ?? '');
+        $queryParams = $request->getQueryParams();
 
-        if ($discussionId !== null) {
-            $this->renderDiscussion($document, $request, $discussionId, $defaultImage);
+        if ($routeName === 'discussion' && !empty($queryParams['id'])) {
+            try {
+                $this->renderDiscussion($document, $request, (int) $queryParams['id'], $defaultImage);
+            } catch (\Throwable) {
+                // If discussion rendering fails for any reason, fall back to index tags
+                $this->renderForumIndex($document, $request, $defaultImage);
+            }
         } else {
             $this->renderForumIndex($document, $request, $defaultImage);
         }
@@ -46,12 +52,16 @@ class AddOgMetaTags
             return;
         }
 
-        $ogUrl = $this->url->to('forum')->route('discussion', [
-            'id' => $discussion->id . ($discussion->slug ? '-' . $discussion->slug : ''),
-        ]);
+        try {
+            $ogUrl = $this->url->to('forum')->route('discussion', [
+                'id' => $discussion->id . ($discussion->slug ? '-' . $discussion->slug : ''),
+            ]);
+        } catch (\Throwable) {
+            $ogUrl = (string) $request->getUri()->withQuery('')->withFragment('');
+        }
 
         $this->addOg($document, 'og:type',  'article');
-        $this->addOg($document, 'og:title', $discussion->title);
+        $this->addOg($document, 'og:title', (string) ($discussion->title ?? ''));
         $this->addOg($document, 'og:url',   $ogUrl);
 
         if ($discussion->created_at) {
@@ -64,9 +74,13 @@ class AddOgMetaTags
         $firstPost = $discussion->firstPost;
         if ($firstPost) {
             try {
-                $html = $firstPost->formatContent();
+                $html = $firstPost->formatContent($request);
             } catch (\Throwable) {
-                $html = (string) ($firstPost->content ?? '');
+                try {
+                    $html = $firstPost->formatContent();
+                } catch (\Throwable) {
+                    $html = (string) ($firstPost->content ?? '');
+                }
             }
 
             $text    = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
@@ -82,14 +96,14 @@ class AddOgMetaTags
         $finalImage = $image ?: $defaultImage;
 
         if ($finalImage) {
-            $this->addOg($document,  'og:image',        $finalImage);
-            $this->addName($document, 'twitter:card',   'summary_large_image');
-            $this->addName($document, 'twitter:image',  $finalImage);
+            $this->addOg($document,  'og:image',       $finalImage);
+            $this->addName($document, 'twitter:card',  'summary_large_image');
+            $this->addName($document, 'twitter:image', $finalImage);
         } else {
             $this->addName($document, 'twitter:card', 'summary');
         }
 
-        $this->addName($document, 'twitter:title', $discussion->title);
+        $this->addName($document, 'twitter:title', (string) ($discussion->title ?? ''));
         if ($excerpt !== '') {
             $this->addName($document, 'twitter:description', $excerpt);
         }
@@ -111,14 +125,14 @@ class AddOgMetaTags
         $this->addOg($document, 'og:url',   $ogUrl);
 
         if ($forumDesc !== '') {
-            $this->addOg($document,  'og:description',      $forumDesc);
+            $this->addOg($document,  'og:description',       $forumDesc);
             $this->addName($document, 'twitter:description', $forumDesc);
         }
 
         if ($defaultImage !== '') {
-            $this->addOg($document,  'og:image',           $defaultImage);
-            $this->addName($document, 'twitter:card',      'summary_large_image');
-            $this->addName($document, 'twitter:image',     $defaultImage);
+            $this->addOg($document,  'og:image',          $defaultImage);
+            $this->addName($document, 'twitter:card',     'summary_large_image');
+            $this->addName($document, 'twitter:image',    $defaultImage);
         } else {
             $this->addName($document, 'twitter:card', 'summary');
         }
@@ -128,22 +142,12 @@ class AddOgMetaTags
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private function discussionIdFromRequest(ServerRequestInterface $request): ?int
-    {
-        $path = $request->getUri()->getPath();
-        if (preg_match('#/d/(\d+)#', $path, $matches)) {
-            return (int) $matches[1];
-        }
-        return null;
-    }
-
     private function extractImage(string $html): ?string
     {
         if ($html === '') return null;
 
         if (preg_match('/<img[^>]+src=["\']([^"\']+)["\'][^>]*/i', $html, $matches)) {
             $src = $matches[1];
-            // Skip data URIs and tiny base64 placeholders
             if (!str_starts_with($src, 'data:')) {
                 return $src;
             }
