@@ -19,19 +19,18 @@ class AddOgMetaTags
     {
         $forumName    = (string) ($this->settings->get('forum_title') ?? '');
         $defaultImage = (string) ($this->settings->get('ernestdefoe-og-image.default_image') ?? '');
+        $fbAppId      = (string) ($this->settings->get('ernestdefoe-og-image.fb_app_id') ?? '');
 
         $this->addOg($document, 'og:site_name', $forumName);
 
-        $routeName   = (string) ($request->getAttribute('routeName') ?? '');
-        $queryParams = $request->getQueryParams();
+        if ($fbAppId !== '') {
+            $this->addOg($document, 'fb:app_id', $fbAppId);
+        }
 
-        if ($routeName === 'discussion' && !empty($queryParams['id'])) {
-            try {
-                $this->renderDiscussion($document, $request, (int) $queryParams['id'], $defaultImage);
-            } catch (\Throwable) {
-                // If discussion rendering fails for any reason, fall back to index tags
-                $this->renderForumIndex($document, $request, $defaultImage);
-            }
+        $discussionId = $this->resolveDiscussionId($request);
+
+        if ($discussionId !== null) {
+            $this->renderDiscussion($document, $request, $discussionId, $defaultImage);
         } else {
             $this->renderForumIndex($document, $request, $defaultImage);
         }
@@ -45,13 +44,18 @@ class AddOgMetaTags
         int $id,
         string $defaultImage
     ): void {
-        $discussion = Discussion::with('firstPost')->find($id);
+        // Load discussion — if not found fall through to index tags
+        $discussion = null;
+        try {
+            $discussion = Discussion::with('firstPost')->find($id);
+        } catch (\Throwable) {}
 
         if (!$discussion) {
             $this->renderForumIndex($document, $request, $defaultImage);
             return;
         }
 
+        // Build the canonical URL — fall back to request URI on failure
         try {
             $ogUrl = $this->url->to('forum')->route('discussion', [
                 'id' => $discussion->id . ($discussion->slug ? '-' . $discussion->slug : ''),
@@ -60,41 +64,35 @@ class AddOgMetaTags
             $ogUrl = (string) $request->getUri()->withQuery('')->withFragment('');
         }
 
+        $title = (string) ($discussion->title ?? '');
+
         $this->addOg($document, 'og:type',  'article');
-        $this->addOg($document, 'og:title', (string) ($discussion->title ?? ''));
+        $this->addOg($document, 'og:title', $title);
         $this->addOg($document, 'og:url',   $ogUrl);
 
-        if ($discussion->created_at) {
-            $this->addOg($document, 'article:published_time', $discussion->created_at->toIso8601String());
-        }
+        try {
+            if ($discussion->created_at) {
+                $this->addOg($document, 'article:published_time', $discussion->created_at->toIso8601String());
+            }
+        } catch (\Throwable) {}
 
+        // Extract content excerpt and image from first post
         $excerpt = '';
         $image   = null;
 
-        $firstPost = $discussion->firstPost;
-        if ($firstPost) {
-            try {
-                $html = $firstPost->formatContent($request);
-            } catch (\Throwable) {
-                try {
-                    $html = $firstPost->formatContent();
-                } catch (\Throwable) {
-                    $html = (string) ($firstPost->content ?? '');
-                }
+        try {
+            $firstPost = $discussion->firstPost;
+            if ($firstPost) {
+                $html = $this->getPostHtml($firstPost, $request);
+                $text    = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
+                $excerpt = mb_strlen($text) > 200 ? mb_substr($text, 0, 197) . '…' : $text;
+                $image   = $this->extractImage($html);
             }
+        } catch (\Throwable) {}
 
-            $text    = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
-            $excerpt = mb_strlen($text) > 200 ? mb_substr($text, 0, 197) . '…' : $text;
-
-            $image = $this->extractImage($html);
-        }
-
-        if ($excerpt !== '') {
-            $this->addOg($document, 'og:description', $excerpt);
-        }
+        $this->addOg($document, 'og:description', $excerpt);
 
         $finalImage = $image ?: $defaultImage;
-
         if ($finalImage) {
             $this->addOg($document,  'og:image',       $finalImage);
             $this->addName($document, 'twitter:card',  'summary_large_image');
@@ -103,10 +101,8 @@ class AddOgMetaTags
             $this->addName($document, 'twitter:card', 'summary');
         }
 
-        $this->addName($document, 'twitter:title', (string) ($discussion->title ?? ''));
-        if ($excerpt !== '') {
-            $this->addName($document, 'twitter:description', $excerpt);
-        }
+        $this->addName($document, 'twitter:title', $title);
+        $this->addName($document, 'twitter:description', $excerpt);
     }
 
     // ── Forum index / all other pages ─────────────────────────────────────────
@@ -124,10 +120,8 @@ class AddOgMetaTags
         $this->addOg($document, 'og:title', $forumTitle);
         $this->addOg($document, 'og:url',   $ogUrl);
 
-        if ($forumDesc !== '') {
-            $this->addOg($document,  'og:description',       $forumDesc);
-            $this->addName($document, 'twitter:description', $forumDesc);
-        }
+        $this->addOg($document,  'og:description',       $forumDesc);
+        $this->addName($document, 'twitter:description', $forumDesc);
 
         if ($defaultImage !== '') {
             $this->addOg($document,  'og:image',          $defaultImage);
@@ -141,6 +135,39 @@ class AddOgMetaTags
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private function resolveDiscussionId(ServerRequestInterface $request): ?int
+    {
+        // Method 1: Flarum's routeName attribute + route params in queryParams
+        $routeName   = (string) ($request->getAttribute('routeName') ?? '');
+        $queryParams = $request->getQueryParams();
+
+        if ($routeName === 'discussion' && !empty($queryParams['id'])) {
+            return (int) $queryParams['id'];
+        }
+
+        // Method 2: URL path pattern — catches any /d/{id} URL regardless of routeName
+        $path = $request->getUri()->getPath();
+        if (preg_match('#/d/(\d+)#', $path, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function getPostHtml(object $firstPost, ServerRequestInterface $request): string
+    {
+        // Try with request param (Flarum 2), then without (Flarum 1.x), then raw content
+        try {
+            return (string) $firstPost->formatContent($request);
+        } catch (\Throwable) {}
+
+        try {
+            return (string) $firstPost->formatContent();
+        } catch (\Throwable) {}
+
+        return (string) ($firstPost->content ?? '');
+    }
 
     private function extractImage(string $html): ?string
     {

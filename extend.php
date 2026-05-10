@@ -12,5 +12,6 @@ return [
         ->css(__DIR__ . '/less/admin.less'),
 
     (new Extend\Settings())
-        ->default('ernestdefoe-og-image.default_image', ''),
+        ->default('ernestdefoe-og-image.default_image', '')
+        ->default('ernestdefoe-og-image.fb_app_id', ''),
 ];
