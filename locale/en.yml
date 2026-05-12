@@ -1,0 +1,9 @@
+ernestdefoe-og-image:
+  admin:
+    settings:
+      default_image_label: Default OG Image URL
+      default_image_help: "Fallback image used when a discussion has no images. Must be an absolute URL. Facebook recommends at least 1200 × 630 px."
+      default_image_placeholder: "https://example.com/images/og-default.jpg"
+      fb_app_id_label: "Facebook App ID (optional)"
+      fb_app_id_help: "Your Facebook App ID. Adds fb:app_id to every page and removes the missing fb:app_id warning in the Facebook Sharing Debugger."
+      fb_app_id_placeholder: "123456789012345"
