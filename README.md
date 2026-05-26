@@ -1,5 +1,11 @@
 # Flarum OG Image
 
+[![Floxum](https://floxum.com/extension/ernestdefoe/og-image/badge/name)](https://floxum.com/extension/ernestdefoe/og-image)
+[![Version](https://floxum.com/extension/ernestdefoe/og-image/badge/highest-version)](https://floxum.com/extension/ernestdefoe/og-image)
+[![Downloads](https://floxum.com/extension/ernestdefoe/og-image/badge/downloads)](https://floxum.com/extension/ernestdefoe/og-image)
+[![Review](https://floxum.com/extension/ernestdefoe/og-image/badge/review)](https://floxum.com/extension/ernestdefoe/og-image)
+[![License](https://floxum.com/extension/ernestdefoe/og-image/badge/license)](https://floxum.com/extension/ernestdefoe/og-image)
+
 Automatically adds Open Graph and Twitter Card meta tags to every page of your Flarum 2 forum so that Facebook, Twitter/X, and other platforms generate rich link previews when discussions are shared or auto-posted.
 
 ---
