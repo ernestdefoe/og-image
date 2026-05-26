@@ -1,0 +1,14 @@
+js/node_modules/
+js/package-lock.json
+vendor/
+composer.lock
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.fleet/
+*.log
+
+# js/dist/ IS committed — Flarum extensions ship compiled assets so end
+# users installing via composer don't need a node toolchain.
