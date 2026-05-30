@@ -5,10 +5,13 @@
     "description": "OG Image meta tag extension for Flarum 2",
     "scripts": {
         "dev": "webpack --mode development --watch",
-        "build": "webpack --mode production"
+        "build": "webpack --mode production",
+        "check-typings": "tsc --noEmit"
     },
     "devDependencies": {
+        "flarum-tsconfig": "^2.0.0",
         "flarum-webpack-config": "^3.0.0",
+        "typescript": "^5.0.0",
         "webpack": "^5.0.0",
         "webpack-cli": "^5.0.0"
     }

@@ -4,6 +4,7 @@ namespace Ernestdefoe\OgImage\Content;
 
 use Flarum\Discussion\Discussion;
 use Flarum\Frontend\Document;
+use Flarum\Http\RequestUtil;
 use Flarum\Http\UrlGenerator;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -30,9 +31,9 @@ class AddOgMetaTags
         $discussionId = $this->resolveDiscussionId($request);
 
         if ($discussionId !== null) {
-            $this->renderDiscussion($document, $request, $discussionId, $defaultImage);
+            $this->renderDiscussion($document, $request, $discussionId, $defaultImage, $forumName);
         } else {
-            $this->renderForumIndex($document, $request, $defaultImage);
+            $this->renderForumIndex($document, $request, $defaultImage, $forumName);
         }
     }
 
@@ -42,16 +43,21 @@ class AddOgMetaTags
         Document $document,
         ServerRequestInterface $request,
         int $id,
-        string $defaultImage
+        string $defaultImage,
+        string $forumName
     ): void {
-        // Load discussion — if not found fall through to index tags
+        // Load the discussion scoped to the actor's visibility, so restricted
+        // discussions (tag/group gated) never leak their title or first-post
+        // excerpt into the raw HTML for a guest/non-member. Not visible → fall
+        // through to the generic index tags.
         $discussion = null;
         try {
-            $discussion = Discussion::find($id);
+            $actor = RequestUtil::getActor($request);
+            $discussion = Discussion::whereVisibleTo($actor)->find($id);
         } catch (\Throwable) {}
 
         if (!$discussion) {
-            $this->renderForumIndex($document, $request, $defaultImage);
+            $this->renderForumIndex($document, $request, $defaultImage, $forumName);
             return;
         }
 
@@ -110,14 +116,16 @@ class AddOgMetaTags
     private function renderForumIndex(
         Document $document,
         ServerRequestInterface $request,
-        string $defaultImage
+        string $defaultImage,
+        string $forumName
     ): void {
-        $forumTitle = (string) ($this->settings->get('forum_title') ?? '');
-        $forumDesc  = (string) ($this->settings->get('forum_description') ?? '');
-        $ogUrl      = (string) $request->getUri()->withQuery('')->withFragment('');
+        // forum_title is read once in __invoke() and threaded through as
+        // $forumName, mirroring how $defaultImage is passed.
+        $forumDesc = (string) ($this->settings->get('forum_description') ?? '');
+        $ogUrl     = (string) $request->getUri()->withQuery('')->withFragment('');
 
         $this->addOg($document, 'og:type',  'website');
-        $this->addOg($document, 'og:title', $forumTitle);
+        $this->addOg($document, 'og:title', $forumName);
         $this->addOg($document, 'og:url',   $ogUrl);
 
         $this->addOg($document,  'og:description',       $forumDesc);
@@ -131,7 +139,7 @@ class AddOgMetaTags
             $this->addName($document, 'twitter:card', 'summary');
         }
 
-        $this->addName($document, 'twitter:title', $forumTitle);
+        $this->addName($document, 'twitter:title', $forumName);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
