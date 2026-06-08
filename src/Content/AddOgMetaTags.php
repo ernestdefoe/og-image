@@ -8,12 +8,14 @@ use Flarum\Http\RequestUtil;
 use Flarum\Http\UrlGenerator;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Log\LoggerInterface;
 
 class AddOgMetaTags
 {
     public function __construct(
         protected SettingsRepositoryInterface $settings,
         protected UrlGenerator $url,
+        protected LoggerInterface $log,
     ) {}
 
     public function __invoke(Document $document, ServerRequestInterface $request): void
@@ -49,12 +51,15 @@ class AddOgMetaTags
         // Load the discussion scoped to the actor's visibility, so restricted
         // discussions (tag/group gated) never leak their title or first-post
         // excerpt into the raw HTML for a guest/non-member. Not visible → fall
-        // through to the generic index tags.
+        // through to the generic index tags. firstPost is eager-loaded so the
+        // excerpt/image extraction below doesn't fire a lazy per-request query.
         $discussion = null;
         try {
             $actor = RequestUtil::getActor($request);
-            $discussion = Discussion::whereVisibleTo($actor)->find($id);
-        } catch (\Throwable) {}
+            $discussion = Discussion::whereVisibleTo($actor)->with('firstPost')->find($id);
+        } catch (\Throwable $e) {
+            $this->log->debug('[og-image] discussion lookup failed for #' . $id . ': ' . $e->getMessage());
+        }
 
         if (!$discussion) {
             $this->renderForumIndex($document, $request, $defaultImage, $forumName);
@@ -66,7 +71,8 @@ class AddOgMetaTags
             $ogUrl = $this->url->to('forum')->route('discussion', [
                 'id' => $discussion->id . ($discussion->slug ? '-' . $discussion->slug : ''),
             ]);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->log->debug('[og-image] canonical URL build failed for discussion #' . $discussion->id . ': ' . $e->getMessage());
             $ogUrl = (string) $request->getUri()->withQuery('')->withFragment('');
         }
 
@@ -80,21 +86,25 @@ class AddOgMetaTags
             if ($discussion->created_at) {
                 $this->addOg($document, 'article:published_time', $discussion->created_at->toIso8601String());
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) {
+            $this->log->debug('[og-image] published_time failed for discussion #' . $discussion->id . ': ' . $e->getMessage());
+        }
 
-        // Extract content excerpt and image from first post
+        // Extract content excerpt and image from the (eager-loaded) first post.
         $excerpt = '';
         $image   = null;
 
         try {
-            $firstPost = $discussion->firstPost ?? $discussion->firstPost()->first();
+            $firstPost = $discussion->firstPost;
             if ($firstPost) {
-                $html = $this->getPostHtml($firstPost, $request);
+                $html    = $this->getPostHtml($firstPost, $request);
                 $text    = preg_replace('/\s+/', ' ', trim(strip_tags($html)));
                 $excerpt = mb_strlen($text) > 200 ? mb_substr($text, 0, 197) . '…' : $text;
                 $image   = $this->extractImage($html);
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) {
+            $this->log->debug('[og-image] excerpt/image extraction failed for discussion #' . $discussion->id . ': ' . $e->getMessage());
+        }
 
         $this->addOg($document, 'og:description', $excerpt);
 
@@ -146,15 +156,10 @@ class AddOgMetaTags
 
     private function resolveDiscussionId(ServerRequestInterface $request): ?int
     {
-        // Method 1: Flarum's routeName attribute + route params in queryParams
-        $routeName   = (string) ($request->getAttribute('routeName') ?? '');
-        $queryParams = $request->getQueryParams();
-
-        if ($routeName === 'discussion' && !empty($queryParams['id'])) {
-            return (int) $queryParams['id'];
-        }
-
-        // Method 2: URL path pattern — catches any /d/{id} URL regardless of routeName
+        // Match any /d/{id} URL from the request path. (Flarum 2 keeps route
+        // params in the `routeParameters` attribute rather than the query
+        // string, so a routeName + queryParams['id'] lookup never fired here —
+        // the path regex is the single source of truth.)
         $path = $request->getUri()->getPath();
         if (preg_match('#/d/(\d+)#', $path, $matches)) {
             return (int) $matches[1];
@@ -165,14 +170,13 @@ class AddOgMetaTags
 
     private function getPostHtml(object $firstPost, ServerRequestInterface $request): string
     {
-        // Try with request param (Flarum 2), then without (Flarum 1.x), then raw content
+        // Render through the formatter (Flarum 2 takes the request); fall back
+        // to the raw stored content if formatting throws.
         try {
             return (string) $firstPost->formatContent($request);
-        } catch (\Throwable) {}
-
-        try {
-            return (string) $firstPost->formatContent();
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) {
+            $this->log->debug('[og-image] formatContent failed: ' . $e->getMessage());
+        }
 
         return (string) ($firstPost->content ?? '');
     }
