@@ -21,7 +21,7 @@
     "extra": {
         "flarum-extension": {
             "title": "OG Image",
-            "category": "theme",
+            "category": "feature",
             "icon": {
                 "name": "fas fa-share-alt",
                 "backgroundColor": "#1877F2",
