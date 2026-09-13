@@ -20,6 +20,27 @@ class AddOgMetaTags
 
     public function __invoke(Document $document, ServerRequestInterface $request): void
     {
+        /*
+         * 🚨 One page, one description.
+         *
+         * This runs on EVERY frontend document, including routes that belong
+         * to some other extension. An extension that owns its own pages —
+         * Atrium's gallery, for one — describes them properly, with an
+         * og:type of `article` and an og:image of the actual photograph. This
+         * class would then add a second og:type of `website`, a second
+         * og:site_name and a second twitter:card on top of it.
+         *
+         * Two og:type tags with different values is not a crash and not a
+         * warning; it is a page that tells Facebook one thing and Slack
+         * another, and the only place it shows up is in somebody's link
+         * preview. So: if the document already carries an og:title, another
+         * extension has described this page and knows more about it than this
+         * one does. Leave it alone.
+         */
+        if ($this->alreadyDescribed($document)) {
+            return;
+        }
+
         $forumName    = (string) ($this->settings->get('forum_title') ?? '');
         $defaultImage = (string) ($this->settings->get('ernestdefoe-og-image.default_image') ?? '');
         $fbAppId      = (string) ($this->settings->get('ernestdefoe-og-image.fb_app_id') ?? '');
@@ -153,6 +174,25 @@ class AddOgMetaTags
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Has something else already written this page's Open Graph tags?
+     *
+     * `og:title` is the marker because it is the one tag every description
+     * has: a page can legitimately have no image and no description, but
+     * nothing sets out to describe a page without naming it.
+     */
+    private function alreadyDescribed(Document $document): bool
+    {
+        foreach ($document->head as $entry) {
+            if (is_string($entry) && str_contains($entry, 'property="og:title"')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
     private function resolveDiscussionId(ServerRequestInterface $request): ?int
     {
