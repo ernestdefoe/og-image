@@ -122,10 +122,8 @@ After making any of these changes, go to **developers.facebook.com/tools/debug**
 
 ## Support
 
-Questions, bug reports, and feature requests:
-
-- **Support forum:** https://ernestdefoe.online
-- **Issues:** https://github.com/ernestdefoe/og-image/issues
+- **Support forum:** [OG Image on ernestdefoe.online](https://ernestdefoe.online/d/6)
+- **Bug reports:** [GitHub issues](https://github.com/ernestdefoe/og-image/issues)
 
 ## License
 
