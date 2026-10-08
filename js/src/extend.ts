@@ -1,8 +1,8 @@
 import app from 'flarum/admin/app';
-import { Admin } from 'flarum/common/extenders';
+import Extend from 'flarum/common/extenders';
 
 export default [
-  new Admin()
+  new Extend.Admin()
     .setting(() => ({
       setting: 'ernestdefoe-og-image.default_image',
       type: 'text',
