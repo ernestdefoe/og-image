@@ -18,6 +18,11 @@
             "Ernestdefoe\\OgImage\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Ernestdefoe\\OgImage\\Tests\\": "tests/"
+        }
+    },
     "extra": {
         "flarum-extension": {
             "title": "OG Image",
@@ -28,6 +33,25 @@
                 "color": "#fff"
             }
         }
+    },
+    "require-dev": {
+        "flarum/markdown": "^2.0",
+        "flarum/phpstan": "^2.0",
+        "flarum/testing": "^2.0"
+    },
+    "scripts": {
+        "test": [
+            "@test:integration"
+        ],
+        "test:integration": "phpunit -c tests/phpunit.integration.xml",
+        "test:setup": "@php tests/integration/setup.php",
+        "analyse:phpstan": "phpstan analyse"
+    },
+    "scripts-descriptions": {
+        "test": "Runs all tests.",
+        "test:integration": "Runs all integration tests.",
+        "test:setup": "Sets up a database for use with integration tests. Execute this only once.",
+        "analyse:phpstan": "Run static analysis"
     },
     "minimum-stability": "dev",
     "prefer-stable": true
