@@ -198,16 +198,16 @@ class AddOgMetaTags
 
     private function resolveDiscussionId(ServerRequestInterface $request): ?int
     {
-        // Match any /d/{id} URL from the request path. (Flarum 2 keeps route
-        // params in the `routeParameters` attribute rather than the query
-        // string, so a routeName + queryParams['id'] lookup never fired here —
-        // the path regex is the single source of truth.)
-        $path = $request->getUri()->getPath();
-        if (preg_match('#/d/(\d+)#', $path, $matches)) {
-            return (int) $matches[1];
+        // Only core's own discussion route, as resolved by the router: another
+        // extension's page whose address merely contains /d/{id} is not one.
+        // Its {id} parameter is "123" or "123-slug"; the leading number is it.
+        if ($request->getAttribute('routeName') !== 'discussion') {
+            return null;
         }
 
-        return null;
+        $id = (int) ($request->getAttribute('routeParameters')['id'] ?? 0);
+
+        return $id > 0 ? $id : null;
     }
 
     private function getPostHtml(object $firstPost, ServerRequestInterface $request): string

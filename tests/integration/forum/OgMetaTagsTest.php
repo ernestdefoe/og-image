@@ -123,7 +123,6 @@ class OgMetaTagsTest extends TestCase
     #[Test]
     public function another_page_whose_address_names_the_discussion_does_not_describe_it_to_a_visitor_who_cannot_see_it()
     {
-        // Any 200 page whose path contains /d/{id} is read as that discussion.
         $this->extend((new Extend\Frontend('forum'))->route('/archive/d/{id}', 'test.archive'));
 
         $tags = $this->meta('/archive/d/3');
@@ -131,6 +130,23 @@ class OgMetaTagsTest extends TestCase
         $this->assertSame(['website'], $tags['og:type']);
         $this->assertSame(['Test Forum'], $tags['og:title']);
         $this->assertStringNotContainsString('secret', strtolower(json_encode($tags)));
+    }
+
+    #[Test]
+    public function another_page_whose_address_contains_d_and_a_number_is_not_read_as_a_discussion()
+    {
+        $this->extend((new Extend\Frontend('forum'))->route('/archive/d/{id}', 'test.archive'));
+
+        $tags = $this->meta('/archive/d/1');
+
+        $this->assertSame(['website'], $tags['og:type']);
+        $this->assertSame(['Test Forum'], $tags['og:title']);
+    }
+
+    #[Test]
+    public function a_discussion_address_with_a_slug_and_post_number_is_still_the_discussion()
+    {
+        $this->assertSame(['Game "day" <thread>'], $this->meta('/d/1-game-day-thread/1')['og:title']);
     }
 
     #[Test]
